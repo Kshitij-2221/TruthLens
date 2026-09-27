@@ -133,24 +133,41 @@ def _signal(kind: str, name: str, weight: int, score, note: str) -> str:
     )
 
 
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}{'' if n == 1 else 's'}"
+
+
 def _source_note(result) -> str:
     source = result["source"]
     if source is None:
-        return "Screenshots don't include a website to rate."
+        return "Couldn't spot a website, outlet name or @handle in the screenshot."
+    found = f"Spotted “{source['matched']}” → " if source.get("matched") else ""
     if not source["known"]:
-        return f"{source['domain']} isn't in the ratings list yet."
-    return f"{source['domain']} · rated {source['rating']}"
+        return f"{found}{source['domain']} isn't in the ratings list yet."
+    return f"{found}{source['domain']} · rated {source['rating']}"
 
 
-def _facts_note(facts) -> str:
+def _evidence(result):
+    """(name, score, note) for the evidence signal: fact-checks, else news coverage."""
+    facts, coverage = result["facts"], result["coverage"]
     n = len(facts["matches"])
-    if facts["error"]:
-        return facts["error"]
-    if n == 0:
-        return "No published fact-checks match this story."
-    if facts["score"] is None:
-        return f"{n} related fact-check{'s' if n > 1 else ''}, but verdicts are unclear."
-    return f"Average verdict across {n} fact-check{'s' if n > 1 else ''}."
+    if facts["score"] is not None:
+        return "Fact-checks", facts["score"], f"Average verdict across {_plural(n, 'fact-check')}."
+
+    rated = {a["domain"] for a in coverage["articles"] if a["score"] is not None}
+    no_fc = "No fact-checks yet" if not facts["error"] else "Fact-check search failed"
+    if coverage["score"] is not None:
+        names = ", ".join(sorted(rated)[:2]) + ("…" if len(rated) > 2 else "")
+        return ("News coverage", coverage["score"],
+                f"{no_fc} · reported by {_plural(len(rated), 'rated outlet')} ({names}).")
+    if coverage["error"]:
+        return "Fact-checks", None, f"{no_fc}, and {coverage['error'][0].lower()}{coverage['error'][1:]}"
+    if coverage["articles"]:
+        return ("News coverage", None,
+                f"{no_fc} · {_plural(len(coverage['articles']), 'report')} found, none from rated outlets.")
+    if n:
+        return "Fact-checks", None, f"{_plural(n, 'related fact-check')}, but verdicts are unclear."
+    return "Fact-checks", None, f"{no_fc}, and no news outlet is reporting this story."
 
 
 def _model_note(ml) -> str:
@@ -177,6 +194,21 @@ def _fact_card(m) -> str:
     )
 
 
+RATING_BADGES = {"high": ("High", "good"), "mixed": ("Mixed", "warn"),
+                 "low": ("Low", "bad"), "satire": ("Satire", "bad")}
+
+
+def _coverage_card(a) -> str:
+    label, tone = RATING_BADGES.get(a["rating"], ("Unrated", "muted"))
+    return (
+        f'<a class="tl-card tl-fact" href="{esc(a["url"])}" target="_blank" rel="noopener noreferrer">'
+        f'<div class="tl-badge tone-{tone}">{label}</div><div>'
+        f'<div class="tl-fact-claim">{esc(a["title"])}</div>'
+        f'<div class="tl-fact-src"><b>{esc(a["domain"])}</b>{icon("arrow")}</div>'
+        "</div></a>"
+    )
+
+
 def results(result: dict):
     overall = result["overall"]
     score = overall["score"]
@@ -190,9 +222,10 @@ def results(result: dict):
         sub = esc(result["domain"])
     else:
         avatar = "Aa"
-        words = result["text"].split()
+        words = result["clean"].split()
         title = esc(" ".join(words[:14]) + ("…" if len(words) > 14 else ""))
-        sub = f"Screenshot · {len(words)} words read"
+        via = f" · via {esc(result['source']['domain'])}" if result["source"] else ""
+        sub = f"Screenshot · {len(words)} words read{via}"
 
     summary = (
         '<div class="tl-section"><div class="tl-eyebrow">Verdict</div>'
@@ -207,10 +240,11 @@ def results(result: dict):
     )
 
     source = result["source"]
+    ev_name, ev_score, ev_note = _evidence(result)
     signals = (
         '<div class="tl-section"><div class="tl-eyebrow">Signals</div><div class="tl-signals">'
         + _signal("source", "Source", 30, source["score"] if source else None, _source_note(result))
-        + _signal("facts", "Fact-checks", 40, result["facts"]["score"], _facts_note(result["facts"]))
+        + _signal("facts", ev_name, 40, ev_score, ev_note)
         + _signal("model", "Language model", 30, result["ml"]["score"], _model_note(result["ml"]))
         + "</div></div>"
     )
@@ -221,4 +255,17 @@ def results(result: dict):
         facts = ('<div class="tl-section"><div class="tl-eyebrow">What fact-checkers say</div>'
                  f'<div class="tl-facts">{cards}</div></div>')
 
-    render(summary + signals + facts)
+    coverage = ""
+    articles = result["coverage"]["articles"]
+    if articles:
+        # One report per outlet, rated outlets first (already sorted)
+        per_outlet, seen = [], set()
+        for a in articles:
+            if a["domain"] not in seen:
+                seen.add(a["domain"])
+                per_outlet.append(a)
+        cards = "".join(_coverage_card(a) for a in per_outlet[:5])
+        coverage = ('<div class="tl-section"><div class="tl-eyebrow">Who else is reporting this</div>'
+                    f'<div class="tl-facts">{cards}</div></div>')
+
+    render(summary + signals + facts + coverage)

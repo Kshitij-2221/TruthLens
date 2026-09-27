@@ -6,10 +6,12 @@ from streamlit_paste_button import paste_image_button
 
 from modules import ui
 from modules.claim_checker import check_claim
+from modules.coverage_checker import check_coverage
 from modules.ocr_extractor import extract_text
 from modules.scorer import combine_scores
-from modules.source_checker import check_source
+from modules.source_checker import check_source, find_source_in_text
 from modules.text_classifier import classify_text
+from modules.text_cleaner import clean_ocr
 from modules.url_extractor import extract_article
 
 st.set_page_config(page_title="TruthLens", page_icon="🔍", layout="centered")
@@ -18,17 +20,26 @@ ui.hero()
 
 
 def analyse(text: str, domain: str | None = None, title: str = "") -> dict:
+    """domain is None for screenshots: the publisher is then guessed from the text."""
     with st.spinner("Weighing the evidence…"):
-        source = check_source(domain) if domain else None
-        facts = check_claim(title or text)
-        ml = classify_text(text)
+        if domain:
+            source, clean = check_source(domain), text
+        else:
+            source, clean = find_source_in_text(text), clean_ocr(text) or text
+        facts = check_claim(title or clean)
+        coverage = check_coverage(title or clean)
+        ml = classify_text(clean)
+
+    # Published fact-checks are the strongest evidence; if there are none (usual for fresh
+    # news), fall back to whether reliable outlets are reporting the same story.
+    evidence = facts["score"] if facts["score"] is not None else coverage["score"]
     overall = combine_scores(
         source_score=source["score"] if source else None,
-        fact_check_score=facts["score"],
+        fact_check_score=evidence,
         classifier_score=ml["score"],
     )
-    return {"text": text, "title": title, "domain": domain,
-            "source": source, "facts": facts, "ml": ml, "overall": overall}
+    return {"text": text, "clean": clean, "title": title, "domain": domain, "source": source,
+            "facts": facts, "coverage": coverage, "ml": ml, "overall": overall}
 
 
 tab_url, tab_image = st.tabs([":material/link: Article link", ":material/image: Screenshot"])

@@ -5,7 +5,7 @@ TruthLens helps you judge whether a news article or social-media screenshot is t
 | Signal | How it works |
 |---|---|
 | **Source reliability** | Looks up the website in a curated list of domain ratings |
-| **Fact-check search** | Searches published fact-checks via the Google Fact Check Tools API |
+| **Fact-check search** | Searches published fact-checks via the Google Fact Check Tools API; if there are none, checks whether reliable outlets are reporting the same story (Google News / GDELT) |
 | **ML classifier** | A TF-IDF + Logistic Regression model trained on labelled real/fake news |
 
 ## Project structure
@@ -21,6 +21,8 @@ TruthLens/
 │   ├── source_checker.py   # Website reliability lookup
 │   ├── ocr_extractor.py    # Read text from screenshots
 │   ├── claim_checker.py    # Fact-check API
+│   ├── coverage_checker.py # Who else is reporting the story
+│   ├── text_cleaner.py     # Clean screenshot text, extract keywords
 │   ├── text_classifier.py  # ML model prediction
 │   ├── scorer.py           # Combine into one score
 │   └── ui.py               # HTML components for the interface

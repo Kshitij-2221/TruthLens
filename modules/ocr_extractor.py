@@ -38,7 +38,9 @@ def extract_text(image_file) -> dict:
     except Exception as e:
         return {"text": "", "error": f"Could not read image: {e}"}
 
-    text = " ".join(text.split())  # collapse broken lines/whitespace
+    # Tidy spacing but keep line breaks — the cleaner uses them to drop interface clutter
+    lines = (" ".join(line.split()) for line in text.splitlines())
+    text = "\n".join(line for line in lines if line)
     if not text:
         return {"text": "", "error": "No text found in the image."}
     return {"text": text, "error": None}

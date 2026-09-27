@@ -5,9 +5,12 @@ Docs: https://developers.google.com/fact-check/tools/api/reference/rest/v1alpha1
 """
 
 import os
+import re
 
 import requests
 from dotenv import load_dotenv
+
+from modules.text_cleaner import clean_ocr, keywords
 
 load_dotenv()
 
@@ -31,6 +34,17 @@ def rating_to_score(rating: str):
     return None
 
 
+def build_queries(text: str, max_queries: int = 3) -> list[str]:
+    """Short, clean search queries: the main sentences, then a keyword query."""
+    cleaned = clean_ocr(text) or text
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+|\n", cleaned) if len(s.split()) >= 5]
+    queries = [" ".join(s.split()[:25]) for s in sentences[:max_queries - 1]]
+    kw = keywords(cleaned, 6)
+    if len(kw) >= 2:
+        queries.append(" ".join(kw))
+    return queries or [" ".join(text.split()[:25])]
+
+
 def check_claim(text: str, max_results: int = 5) -> dict:
     """Search fact-checks for the text. Returns {'matches', 'score', 'error'}.
 
@@ -40,28 +54,33 @@ def check_claim(text: str, max_results: int = 5) -> dict:
     if not api_key:
         return {"matches": [], "score": None, "error": "GOOGLE_FACT_CHECK_API_KEY is not set in .env"}
 
-    # The API works best with a short query, so use the first ~30 words
-    query = " ".join(text.split()[:30])
-    params = {"query": query, "key": api_key, "pageSize": max_results, "languageCode": "en"}
+    matches, seen = [], set()
+    for query in build_queries(text):
+        params = {"query": query, "key": api_key, "pageSize": max_results, "languageCode": "en"}
+        try:
+            response = requests.get(API_URL, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+        except requests.RequestException as e:
+            return {"matches": [], "score": None, "error": f"Fact-check API error: {e}"}
 
-    try:
-        response = requests.get(API_URL, params=params, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-    except requests.RequestException as e:
-        return {"matches": [], "score": None, "error": f"Fact-check API error: {e}"}
-
-    matches = []
-    for claim in data.get("claims", []):
-        for review in claim.get("claimReview", []):
-            rating = review.get("textualRating", "")
-            matches.append({
-                "claim": claim.get("text", ""),
-                "rating": rating,
-                "score": rating_to_score(rating),
-                "publisher": review.get("publisher", {}).get("name", ""),
-                "url": review.get("url", ""),
-            })
+        for claim in data.get("claims", []):
+            for review in claim.get("claimReview", []):
+                url = review.get("url", "")
+                if url in seen:
+                    continue
+                seen.add(url)
+                rating = review.get("textualRating", "")
+                matches.append({
+                    "claim": claim.get("text", ""),
+                    "rating": rating,
+                    "score": rating_to_score(rating),
+                    "publisher": review.get("publisher", {}).get("name", ""),
+                    "url": url,
+                })
+        if len(matches) >= max_results:
+            break
+    matches = matches[:max_results]
 
     scores = [m["score"] for m in matches if m["score"] is not None]
     avg = sum(scores) / len(scores) if scores else None
