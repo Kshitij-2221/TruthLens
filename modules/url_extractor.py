@@ -3,6 +3,7 @@
 import requests
 import tldextract
 from bs4 import BeautifulSoup
+from curl_cffi import requests as browser_requests
 
 HEADERS = {
     "User-Agent": (
@@ -20,18 +21,33 @@ def get_domain(url: str) -> str:
     return (parts.domain or "").lower()
 
 
+def fetch_html(url: str, timeout: int) -> str:
+    """Get the page HTML. Many news sites (e.g. NDTV) block plain Python requests,
+    so first try curl_cffi, which looks like a real Chrome browser."""
+    try:
+        response = browser_requests.get(url, impersonate="chrome", timeout=timeout)
+        response.raise_for_status()
+        return response.text
+    except Exception:
+        response = requests.get(url, headers=HEADERS, timeout=timeout)
+        response.raise_for_status()
+        return response.text
+
+
 def extract_article(url: str, timeout: int = 10) -> dict:
     """Download a page and return {'title', 'text', 'domain', 'error'}."""
     result = {"title": "", "text": "", "domain": get_domain(url), "error": None}
 
     try:
-        response = requests.get(url, headers=HEADERS, timeout=timeout)
-        response.raise_for_status()
+        html = fetch_html(url, timeout)
     except requests.RequestException as e:
-        result["error"] = f"Could not fetch URL: {e}"
+        result["error"] = (
+            f"Could not fetch URL: {e}\n\n"
+            "This site may block automated access — try the Screenshot tab instead."
+        )
         return result
 
-    soup = BeautifulSoup(response.text, "html.parser")
+    soup = BeautifulSoup(html, "html.parser")
 
     # Remove parts of the page that are not the article
     for tag in soup(["script", "style", "nav", "header", "footer", "aside", "form"]):

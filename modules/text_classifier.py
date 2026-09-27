@@ -4,12 +4,28 @@ The notebook saves a scikit-learn Pipeline (TF-IDF + classifier) to models/fake_
 Label convention: 1 = real, 0 = fake.
 """
 
+import re
 from functools import lru_cache
 from pathlib import Path
 
 import joblib
 
 MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "fake_news_model.joblib"
+
+# Formatting quirks that differ between the dataset's fake and real sources (links, tweets,
+# "Getty Images", "Reuters", weekday datelines...). Left in, the model learns these instead of
+# the writing itself. KEEP IN SYNC with the copy in notebooks/train_classifier.ipynb.
+LEAKS = re.compile(r"""
+    https?://\S+ | www\.\S+ | pic\.twitter\.com/\S+ | \S+\.com\b | [@#]\w+
+  | \breuters\b | \bgetty\s+images?\b | \bfeatured\s+image\b | \bimage\s+(via|credit)\b
+  | \bphoto\s+(by|via|credit)\b | \bvia\s+(twitter|youtube|facebook)\b | \b21st\s+century\s+wire\b
+  | \b(video|watch|screenshot|image|images)\b
+  | \b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b
+""", re.I | re.X)
+
+
+def clean_text(text: str) -> str:
+    return re.sub(r"\s+", " ", LEAKS.sub(" ", str(text))).strip()
 
 
 @lru_cache(maxsize=1)
@@ -32,7 +48,7 @@ def classify_text(text: str) -> dict:
     if not text or not text.strip():
         return {"label": None, "score": None, "error": "No text to classify."}
 
-    proba = model.predict_proba([text])[0]
+    proba = model.predict_proba([clean_text(text)])[0]
     classes = list(model.classes_)
     real_prob = float(proba[classes.index(1)])
 

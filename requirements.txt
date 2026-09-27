@@ -1,5 +1,6 @@
 streamlit>=1.36
 requests>=2.31
+curl_cffi>=0.7
 beautifulsoup4>=4.12
 tldextract>=5.1
 pandas>=2.0
