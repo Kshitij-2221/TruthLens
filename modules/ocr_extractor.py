@@ -26,12 +26,12 @@ def preprocess(image: Image.Image) -> Image.Image:
 
 
 def extract_text(image_file) -> dict:
-    """Take a file path or file-like object (e.g. Streamlit upload).
+    """Take a PIL image, a file path, or a file-like object (e.g. Streamlit upload).
 
     Returns {'text', 'error'}.
     """
     try:
-        image = Image.open(image_file)
+        image = image_file if isinstance(image_file, Image.Image) else Image.open(image_file)
         text = pytesseract.image_to_string(preprocess(image))
     except pytesseract.TesseractNotFoundError:
         return {"text": "", "error": "Tesseract is not installed or TESSERACT_CMD is wrong."}

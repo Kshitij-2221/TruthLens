@@ -1,6 +1,8 @@
 """TruthLens — Streamlit app. Run with:  streamlit run app.py"""
 
 import streamlit as st
+from PIL import Image
+from streamlit_paste_button import paste_image_button
 
 from modules.claim_checker import check_claim
 from modules.ocr_extractor import extract_text
@@ -71,12 +73,30 @@ with tab_url:
             show_results(article["text"], article["domain"])
 
 with tab_image:
-    upload = st.file_uploader("Upload a screenshot", type=["png", "jpg", "jpeg", "webp"])
-    if upload:
-        st.image(upload, use_container_width=True)
+    upload = st.file_uploader(
+        "Upload or drag and drop a screenshot", type=["png", "jpg", "jpeg", "webp"]
+    )
+    st.caption("…or copy an image (e.g. Win + Shift + S) and click:")
+    pasted = paste_image_button("📋 Paste image", key="paste_image")
+
+    # Whichever was added most recently wins. The paste button returns its image again on
+    # every rerun, so compare pasted images by content to spot a genuinely new paste.
+    paste_id = hash(pasted.image_data.tobytes()) if pasted.image_data is not None else None
+    if upload is not None and upload.file_id != st.session_state.get("last_upload_id"):
+        st.session_state.last_upload_id = upload.file_id
+        st.session_state.screenshot = Image.open(upload)
+    elif paste_id is not None and paste_id != st.session_state.get("last_paste_id"):
+        st.session_state.last_paste_id = paste_id
+        st.session_state.screenshot = pasted.image_data
+    elif upload is None and paste_id is None:
+        st.session_state.pop("screenshot", None)
+
+    image = st.session_state.get("screenshot")
+    if image is not None:
+        st.image(image, width="stretch")
         if st.button("Check screenshot"):
             with st.spinner("Reading text from image..."):
-                ocr = extract_text(upload)
+                ocr = extract_text(image)
             if ocr["error"]:
                 st.error(ocr["error"])
             else:
