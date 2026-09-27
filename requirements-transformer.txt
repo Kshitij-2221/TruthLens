@@ -1,0 +1,5 @@
+# Optional: the fine-tuned transformer classifier (models/transformer/).
+# Without these the app falls back to the TF-IDF model.
+# GPU (NVIDIA): pip install torch --index-url https://download.pytorch.org/whl/cu128
+torch>=2.4
+transformers>=4.44

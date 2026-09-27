@@ -174,9 +174,10 @@ def _evidence(result):
 def _model_note(ml) -> str:
     if ml["error"]:
         return ml["error"]
+    by = f"{ml['model']} · " if ml.get("model") else ""
     if ml["label"] == "real":
-        return "Writing style reads like professional reporting."
-    return "Writing style resembles known fake news."
+        return f"{by}Writing reads like professional reporting."
+    return f"{by}Writing resembles known fake news."
 
 
 def _fact_card(m) -> str:

@@ -13,7 +13,10 @@ Streamlit app that estimates the credibility of a news article (from a URL) or a
    The dataset's `Label` column is NOT a real/fake label (text model scores below the majority baseline) — don't train on it.
    If no fact-checks exist (usual for fresh news), `modules/coverage_checker.py` checks whether rated outlets report the story
    (Google News RSS, GDELT fallback) and its score is used as the evidence signal instead.
-4. `modules/text_classifier.py` — scikit-learn pipeline loaded from `models/fake_news_model.joblib` (label 1 = real, 0 = fake), trained in `notebooks/train_classifier.ipynb` on Google Colab.
+4. `modules/text_classifier.py` — fine-tuned DistilBERT in `models/transformer/` (`notebooks/train_transformer.ipynb`, ~10 min on the local RTX 4070)
+   when torch + transformers are installed; falls back to the TF-IDF pipeline `models/fake_news_model.joblib` (`notebooks/train_classifier.ipynb`).
+   Label 1 = real, 0 = fake. Both notebooks and the module share the same `clean_text()` LEAKS regex — keep them in sync.
+   Style models cannot catch well-written fakes (0/4 in testing) — that's the evidence signals' job.
 5. `modules/scorer.py` — weighted average of available signals (0–1 each) → score 0–100 + verdict.
 
 ## UI

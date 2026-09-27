@@ -6,7 +6,7 @@ TruthLens helps you judge whether a news article or social-media screenshot is t
 |---|---|
 | **Source reliability** | Looks up the website in a curated list of domain ratings |
 | **Fact-check search** | Searches 23k Indian fact-checks offline (Bharat Fake News Kosh) and the Google Fact Check Tools API; if there are none, checks whether reliable outlets are reporting the same story (Google News / GDELT) |
-| **ML classifier** | A TF-IDF + Logistic Regression model trained on labelled real/fake news |
+| **Language model** | Fine-tuned DistilBERT transformer (falls back to TF-IDF + Logistic Regression) trained on labelled real/fake news |
 
 ## Project structure
 
@@ -29,7 +29,9 @@ TruthLens/
 │   └── ui.py               # HTML components for the interface
 ├── data/source_ratings.csv # Domain reliability ratings
 ├── models/                 # Trained model (not committed)
-└── notebooks/train_classifier.ipynb
+└── notebooks/
+    ├── train_classifier.ipynb   # TF-IDF model (fallback)
+    └── train_transformer.ipynb  # DistilBERT / MuRIL fine-tuning
 ```
 
 ## Setup
@@ -45,7 +47,16 @@ TruthLens/
    ```
    GOOGLE_FACT_CHECK_API_KEY=your_key_here
    ```
-4. **Train the model** — open `notebooks/train_classifier.ipynb` in Google Colab, run all cells, download `fake_news_model.joblib` and place it in `models/`.
+4. **Train the transformer** (recommended; needs an NVIDIA GPU or Colab GPU)
+   ```bash
+   pip install torch --index-url https://download.pytorch.org/whl/cu128
+   pip install -r requirements-transformer.txt
+   ```
+   Run `notebooks/train_transformer.ipynb` with `Fake.csv`/`True.csv` next to it and move the output folder to
+   `models/transformer/`. Set `MODEL_NAME = "google/muril-base-cased"` to fine-tune MuRIL instead (only useful with
+   Indian-language labelled data). Without it the app uses the TF-IDF model below.
+
+   **TF-IDF fallback model** — open `notebooks/train_classifier.ipynb` in Google Colab, run all cells, download `fake_news_model.joblib` and place it in `models/`.
 5. **Build the Indian fact-check index** (optional but recommended) — download
    Bharat Fake News Kosh (search for it on Kaggle), save the `.xlsx` as
    `data/raw/bharatfakenewskosh.xlsx`, then run:
@@ -61,6 +72,21 @@ TruthLens/
    ```
 
 The app still works if the model or API key is missing — it just uses the signals that are available.
+
+## Model comparison
+
+Both models score ~99% on the dataset's own test split, which says little: it comes from the same US 2016–17 sources.
+On an out-of-domain check (40 current articles from NDTV, The Hindu, Indian Express, BBC and Hindustan Times, plus 8
+hand-written fake-style posts):
+
+| | TF-IDF | DistilBERT |
+|---|---|---|
+| Real articles judged real | 28/40 | **32/40** |
+| Crude fake forwards caught | 3/4 | **4/4** |
+| Polished fakes (written like real news) caught | 0/4 | 0/4 |
+
+A style model cannot tell a well-written lie from a well-written truth — that is what the fact-check and news-coverage
+signals are for.
 
 ## Limitations
 
