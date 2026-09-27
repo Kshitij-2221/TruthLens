@@ -20,3 +20,6 @@ models/*
 .idea/
 .DS_Store
 Thumbs.db
+
+# Raw training data (large)
+data/raw/

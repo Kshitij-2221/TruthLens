@@ -13,11 +13,15 @@ MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "fake_news_mode
 
 
 @lru_cache(maxsize=1)
+def _load_from_disk():
+    return joblib.load(MODEL_PATH)
+
+
 def load_model():
     """Load the saved model once. Returns None if it hasn't been trained yet."""
     if not MODEL_PATH.exists():
-        return None
-    return joblib.load(MODEL_PATH)
+        return None  # not cached, so a model added later is picked up
+    return _load_from_disk()
 
 
 def classify_text(text: str) -> dict:
