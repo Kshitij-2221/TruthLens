@@ -47,7 +47,7 @@ TruthLens/
    ```
 4. **Train the model** — open `notebooks/train_classifier.ipynb` in Google Colab, run all cells, download `fake_news_model.joblib` and place it in `models/`.
 5. **Build the Indian fact-check index** (optional but recommended) — download
-   [Bharat Fake News Kosh](https://www.kaggle.com/datasets/man2191989/bharatfakenewskosh), save the `.xlsx` as
+   Bharat Fake News Kosh (search for it on Kaggle), save the `.xlsx` as
    `data/raw/bharatfakenewskosh.xlsx`, then run:
    ```bash
    python -m modules.kosh_search
