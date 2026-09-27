@@ -9,6 +9,11 @@ Streamlit app that estimates the credibility of a news article (from a URL) or a
 4. `modules/text_classifier.py` — scikit-learn pipeline loaded from `models/fake_news_model.joblib` (label 1 = real, 0 = fake), trained in `notebooks/train_classifier.ipynb` on Google Colab.
 5. `modules/scorer.py` — weighted average of available signals (0–1 each) → score 0–100 + verdict.
 
+## UI
+- `app.py` handles flow/state only; all custom HTML lives in `modules/ui.py`, styles in `assets/style.css`, theme in `.streamlit/config.toml`.
+- Streamlit 1.64 markup: target `data-testid` selectors (`stTab`, `stTabPanel`, `stTextInputRootElement`, ...), not `data-baseweb`.
+- Escape any user/API text with `ui.esc()` before putting it in HTML.
+
 ## Conventions
 - Every module function returns a dict with an `error` key (None on success) instead of raising, so the UI can show partial results.
 - All scores are 0..1 floats, or `None` when a signal is unavailable; the scorer skips `None` and re-weights.

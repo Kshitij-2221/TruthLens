@@ -4,6 +4,7 @@ import streamlit as st
 from PIL import Image
 from streamlit_paste_button import paste_image_button
 
+from modules import ui
 from modules.claim_checker import check_claim
 from modules.ocr_extractor import extract_text
 from modules.scorer import combine_scores
@@ -12,72 +13,64 @@ from modules.text_classifier import classify_text
 from modules.url_extractor import extract_article
 
 st.set_page_config(page_title="TruthLens", page_icon="🔍", layout="centered")
-st.title("🔍 TruthLens")
-st.caption("Check how credible a news article or screenshot is.")
+ui.inject_css()
+ui.hero()
 
 
-def pct(value):
-    return "—" if value is None else f"{value * 100:.0f}%"
-
-
-def show_results(text: str, domain: str | None = None):
-    source = check_source(domain) if domain else None
-    with st.spinner("Checking fact-check databases..."):
-        facts = check_claim(text)
-    ml = classify_text(text)
-
-    result = combine_scores(
+def analyse(text: str, domain: str | None = None, title: str = "") -> dict:
+    with st.spinner("Weighing the evidence…"):
+        source = check_source(domain) if domain else None
+        facts = check_claim(title or text)
+        ml = classify_text(text)
+    overall = combine_scores(
         source_score=source["score"] if source else None,
         fact_check_score=facts["score"],
         classifier_score=ml["score"],
     )
-
-    st.divider()
-    if result["score"] is None:
-        st.warning(result["verdict"])
-    else:
-        st.metric("Credibility score", f"{result['score']} / 100")
-        st.progress(result["score"] / 100)
-        st.subheader(result["verdict"])
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Source", pct(source["score"]) if source else "—",
-                source["rating"] if source else "n/a")
-    col2.metric("Fact-checks", pct(facts["score"]), f"{len(facts['matches'])} found")
-    col3.metric("ML model", pct(ml["score"]), ml["label"] or "n/a")
-
-    for err in (facts["error"], ml["error"]):
-        if err:
-            st.info(err)
-
-    if facts["matches"]:
-        st.subheader("Related fact-checks")
-        for m in facts["matches"]:
-            st.markdown(f"- **{m['rating']}** — {m['claim']}  \n  _{m['publisher']}_ · [read]({m['url']})")
-
-    with st.expander("Text analysed"):
-        st.write(text[:5000])
+    return {"text": text, "title": title, "domain": domain,
+            "source": source, "facts": facts, "ml": ml, "overall": overall}
 
 
-tab_url, tab_image = st.tabs(["🔗 Article link", "🖼️ Screenshot"])
+tab_url, tab_image = st.tabs([":material/link: Article link", ":material/image: Screenshot"])
 
 with tab_url:
-    url = st.text_input("Paste a news article URL", placeholder="https://...")
-    if st.button("Check article", disabled=not url):
-        with st.spinner("Fetching article..."):
-            article = extract_article(url)
-        if article["error"]:
-            st.error(article["error"])
+    with st.form("url_form", border=False):
+        col_input, col_button = st.columns([4, 1], vertical_alignment="bottom")
+        url = col_input.text_input(
+            "Article link", placeholder="Paste a news article link — https://…",
+            label_visibility="collapsed",
+        )
+        submitted = col_button.form_submit_button("Analyze", type="primary", width="stretch")
+    ui.hint("Works with most news sites. If one blocks us, screenshot the article and use the other tab.")
+
+    if submitted:
+        if not url.strip():
+            st.session_state.result = None
+            st.session_state.error = "Paste an article link first."
         else:
-            st.write(f"**{article['title']}**  \n`{article['domain']}`")
-            show_results(article["text"], article["domain"])
+            with st.spinner("Fetching the article…"):
+                article = extract_article(url.strip())
+            if article["error"]:
+                st.session_state.result = None
+                st.session_state.error = article["error"]
+            else:
+                st.session_state.error = None
+                st.session_state.result = analyse(article["text"], article["domain"], article["title"])
 
 with tab_image:
     upload = st.file_uploader(
-        "Upload or drag and drop a screenshot", type=["png", "jpg", "jpeg", "webp"]
+        "Drag and drop a screenshot, or click Upload", type=["png", "jpg", "jpeg", "webp"]
     )
-    st.caption("…or copy an image (e.g. Win + Shift + S) and click:")
-    pasted = paste_image_button("📋 Paste image", key="paste_image")
+    ui.or_divider()
+    col_paste, col_hint = st.columns([1, 2], vertical_alignment="center")
+    with col_paste:
+        pasted = paste_image_button(
+            "Paste from clipboard", key="paste_image",
+            text_color="#E7EAF2", background_color="#1B2233", hover_background_color="#252E45",
+        )
+    with col_hint:
+        ui.hint("Copy an image first — <kbd>Win</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd> "
+                "to snip, or right-click an image → Copy image.")
 
     # Whichever was added most recently wins. The paste button returns its image again on
     # every rerun, so compare pasted images by content to spot a genuinely new paste.
@@ -94,10 +87,23 @@ with tab_image:
     image = st.session_state.get("screenshot")
     if image is not None:
         st.image(image, width="stretch")
-        if st.button("Check screenshot"):
-            with st.spinner("Reading text from image..."):
+        if st.button("Analyze screenshot", type="primary", width="stretch"):
+            with st.spinner("Reading text from the image…"):
                 ocr = extract_text(image)
             if ocr["error"]:
-                st.error(ocr["error"])
+                st.session_state.result = None
+                st.session_state.error = ocr["error"]
             else:
-                show_results(ocr["text"])
+                st.session_state.error = None
+                st.session_state.result = analyse(ocr["text"])
+
+if st.session_state.get("error"):
+    ui.notice(st.session_state.error)
+
+result = st.session_state.get("result")
+if result:
+    ui.results(result)
+    with st.expander("Show the text we analysed"):
+        ui.render(f'<div class="tl-fulltext">{ui.esc(result["text"][:5000])}</div>')
+
+ui.footer()

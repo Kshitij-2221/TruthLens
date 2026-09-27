@@ -13,6 +13,8 @@ TruthLens helps you judge whether a news article or social-media screenshot is t
 ```
 TruthLens/
 ├── app.py                  # Streamlit web app
+├── assets/style.css        # UI styles
+├── .streamlit/config.toml  # Theme
 ├── requirements.txt
 ├── modules/
 │   ├── url_extractor.py    # Fetch article text from a link
@@ -20,7 +22,8 @@ TruthLens/
 │   ├── ocr_extractor.py    # Read text from screenshots
 │   ├── claim_checker.py    # Fact-check API
 │   ├── text_classifier.py  # ML model prediction
-│   └── scorer.py           # Combine into one score
+│   ├── scorer.py           # Combine into one score
+│   └── ui.py               # HTML components for the interface
 ├── data/source_ratings.csv # Domain reliability ratings
 ├── models/                 # Trained model (not committed)
 └── notebooks/train_classifier.ipynb
