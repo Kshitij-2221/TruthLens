@@ -5,7 +5,7 @@ TruthLens helps you judge whether a news article or social-media screenshot is t
 | Signal | How it works |
 |---|---|
 | **Source reliability** | Looks up the website in a curated list of domain ratings |
-| **Fact-check search** | Searches published fact-checks via the Google Fact Check Tools API; if there are none, checks whether reliable outlets are reporting the same story (Google News / GDELT) |
+| **Fact-check search** | Searches 23k Indian fact-checks offline (Bharat Fake News Kosh) and the Google Fact Check Tools API; if there are none, checks whether reliable outlets are reporting the same story (Google News / GDELT) |
 | **ML classifier** | A TF-IDF + Logistic Regression model trained on labelled real/fake news |
 
 ## Project structure
@@ -22,6 +22,7 @@ TruthLens/
 │   ├── ocr_extractor.py    # Read text from screenshots
 │   ├── claim_checker.py    # Fact-check API
 │   ├── coverage_checker.py # Who else is reporting the story
+│   ├── kosh_search.py      # Offline search of Indian fact-checks
 │   ├── text_cleaner.py     # Clean screenshot text, extract keywords
 │   ├── text_classifier.py  # ML model prediction
 │   ├── scorer.py           # Combine into one score
@@ -45,7 +46,16 @@ TruthLens/
    GOOGLE_FACT_CHECK_API_KEY=your_key_here
    ```
 4. **Train the model** — open `notebooks/train_classifier.ipynb` in Google Colab, run all cells, download `fake_news_model.joblib` and place it in `models/`.
-5. **Run**
+5. **Build the Indian fact-check index** (optional but recommended) — download
+   [Bharat Fake News Kosh](https://www.kaggle.com/datasets/man2191989/bharatfakenewskosh), save the `.xlsx` as
+   `data/raw/bharatfakenewskosh.xlsx`, then run:
+   ```bash
+   python -m modules.kosh_search
+   ```
+   Matching was calibrated on 800 reworded claims vs 1,400 real Indian headlines: a similarity of 0.50 finds 97% of
+   reworded claims while falsely matching 0.6% of real news. The dataset's `Label` column is not a real/fake label
+   (a text classifier trained on it scores 59.7% vs a 60.7% majority baseline), so it is used for search, not training.
+6. **Run**
    ```bash
    streamlit run app.py
    ```

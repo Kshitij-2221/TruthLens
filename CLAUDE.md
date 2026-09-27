@@ -8,6 +8,9 @@ Streamlit app that estimates the credibility of a news article (from a URL) or a
 2. `modules/source_checker.py` — looks up the domain in `data/source_ratings.csv` (domain, rating, score 0–1, aliases).
    For screenshots, `find_source_in_text()` detects the publisher from domains, outlet names or @handles (`aliases` column, `|`-separated).
 3. `modules/claim_checker.py` — Google Fact Check Tools API; key in `.env` as `GOOGLE_FACT_CHECK_API_KEY`.
+   Also searches `modules/kosh_search.py`: a local TF-IDF index of 22,987 Indian fact-checks (Bharat Fake News Kosh) at
+   `models/kosh_index.joblib`, built with `python -m modules.kosh_search`. Similarity >= 0.50 is scored, 0.40–0.50 shown only.
+   The dataset's `Label` column is NOT a real/fake label (text model scores below the majority baseline) — don't train on it.
    If no fact-checks exist (usual for fresh news), `modules/coverage_checker.py` checks whether rated outlets report the story
    (Google News RSS, GDELT fallback) and its score is used as the evidence signal instead.
 4. `modules/text_classifier.py` — scikit-learn pipeline loaded from `models/fake_news_model.joblib` (label 1 = real, 0 = fake), trained in `notebooks/train_classifier.ipynb` on Google Colab.

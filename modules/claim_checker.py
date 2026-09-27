@@ -10,6 +10,7 @@ import re
 import requests
 from dotenv import load_dotenv
 
+from modules import kosh_search
 from modules.text_cleaner import clean_ocr, keywords
 
 load_dotenv()
@@ -49,20 +50,28 @@ def check_claim(text: str, max_results: int = 5) -> dict:
     """Search fact-checks for the text. Returns {'matches', 'score', 'error'}.
 
     score is the average truth score (0..1) of matched verdicts, or None if nothing matched.
+    Combines Indian fact-checks from the local Bharat Fake News Kosh index with Google's API;
+    'error' is only set when neither source could be searched.
     """
-    api_key = os.getenv("GOOGLE_FACT_CHECK_API_KEY")
-    if not api_key:
-        return {"matches": [], "score": None, "error": "GOOGLE_FACT_CHECK_API_KEY is not set in .env"}
+    cleaned = clean_ocr(text) or text
+    local = kosh_search.search(cleaned)
+    matches, seen = list(local), {m["url"] for m in local}
+    api_error = None
 
-    matches, seen = [], set()
-    for query in build_queries(text):
+    api_key = os.getenv("GOOGLE_FACT_CHECK_API_KEY")
+    queries = build_queries(text) if api_key else []
+    if not api_key:
+        api_error = "GOOGLE_FACT_CHECK_API_KEY is not set in .env"
+
+    for query in queries:
         params = {"query": query, "key": api_key, "pageSize": max_results, "languageCode": "en"}
         try:
             response = requests.get(API_URL, params=params, timeout=10)
             response.raise_for_status()
             data = response.json()
         except requests.RequestException as e:
-            return {"matches": [], "score": None, "error": f"Fact-check API error: {e}"}
+            api_error = f"Fact-check API error: {e}"
+            break
 
         for claim in data.get("claims", []):
             for review in claim.get("claimReview", []):
@@ -84,4 +93,5 @@ def check_claim(text: str, max_results: int = 5) -> dict:
 
     scores = [m["score"] for m in matches if m["score"] is not None]
     avg = sum(scores) / len(scores) if scores else None
-    return {"matches": matches, "score": avg, "error": None}
+    error = api_error if api_error and not kosh_search.INDEX_PATH.exists() else None
+    return {"matches": matches, "score": avg, "error": error}

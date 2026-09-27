@@ -34,7 +34,7 @@ VERDICTS = {
               "Try the full article link instead of a screenshot."),
 }
 
-FACT_BADGES = {0.0: ("False", "bad"), 0.4: ("Mixed", "warn"), 1.0: ("True", "good")}
+FACT_BADGES = {0.0: ("False", "bad"), 0.25: ("Disputed", "bad"), 0.4: ("Mixed", "warn"), 1.0: ("True", "good")}
 
 
 def esc(value) -> str:
@@ -152,7 +152,8 @@ def _evidence(result):
     facts, coverage = result["facts"], result["coverage"]
     n = len(facts["matches"])
     if facts["score"] is not None:
-        return "Fact-checks", facts["score"], f"Average verdict across {_plural(n, 'fact-check')}."
+        scored = sum(m["score"] is not None for m in facts["matches"])
+        return "Fact-checks", facts["score"], f"Average verdict across {_plural(scored, 'matching fact-check')}."
 
     rated = {a["domain"] for a in coverage["articles"] if a["score"] is not None}
     no_fc = "No fact-checks yet" if not facts["error"] else "Fact-check search failed"
@@ -179,7 +180,10 @@ def _model_note(ml) -> str:
 
 
 def _fact_card(m) -> str:
-    label, tone = FACT_BADGES.get(m["score"], ("Unrated", "muted"))
+    if m.get("strong") is False:  # local match too loose to trust its verdict
+        label, tone = "Similar", "muted"
+    else:
+        label, tone = FACT_BADGES.get(m["score"], ("Unrated", "muted"))
     rating = m["rating"] if len(m["rating"]) <= 240 else m["rating"][:237] + "…"
     tag = "a" if m["url"] else "div"
     href = f' href="{esc(m["url"])}" target="_blank" rel="noopener noreferrer"' if m["url"] else ""
